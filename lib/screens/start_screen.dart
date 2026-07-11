@@ -2,16 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:pagolisto/core/app_colors.dart';
-import 'package:pagolisto/widgets/shield_logo.dart';
 import 'package:pagolisto/screens/about_screen.dart';
+import 'package:pagolisto/screens/welcome_name_screen.dart';
+import 'package:pagolisto/services/local_storage_service.dart';
 
 /// Pantalla de bienvenida general de "Pago Listo".
 ///
 /// Es la primera vista que ve cualquier usuario, antes de registrarse
-/// o iniciar sesión — por eso el copy es siempre genérico, nunca un
-/// saludo personalizado con nombre.
+/// o iniciar sesión.
 class StartScreen extends StatelessWidget {
   const StartScreen({super.key});
+
+  Future<void> _onEnter(BuildContext context) async {
+    final hasName = await LocalStorageService.hasUserName();
+
+    if (!context.mounted) return;
+
+    if (!hasName) {
+      // Primera vez: pide el nombre antes de ir a Inicio.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const WelcomeNameScreen(),
+        ),
+      );
+    } else {
+      // Ya tiene nombre guardado: va directo a Inicio.
+      Navigator.of(context).pushReplacementNamed('/home');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,21 +45,23 @@ class StartScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Column(
               children: [
-                const Spacer(flex: 3),
-                const _LogoBadge(),
-                const SizedBox(height: 32),
-                const _AppTitle(),
-                const SizedBox(height: 14),
-                const _Subtitle(),
-                const Spacer(flex: 4),
+                const Spacer(flex: 1),
+
+                const _Logo(),
+
+                const Spacer(flex: 1),
+
+                const _NoveltiesCard(),
+
+                const Spacer(flex: 2),
+
                 _PrimaryButton(
                   label: 'ENTRAR',
-                  onTap: () {
-                    // TODO: conectar con el flujo real de registro/login.
-                    Navigator.of(context).pushReplacementNamed('/home');
-                  },
+                  onTap: () => _onEnter(context),
                 ),
+
                 const SizedBox(height: 14),
+
                 _SecondaryButton(
                   label: 'ACERCA DE PAGO LISTO',
                   onTap: () {
@@ -52,6 +72,7 @@ class StartScreen extends StatelessWidget {
                     );
                   },
                 ),
+
                 const SizedBox(height: 32),
               ],
             ),
@@ -62,80 +83,214 @@ class StartScreen extends StatelessWidget {
   }
 }
 
-/// Contenedor circular con resplandor verde detrás del logo del escudo.
-class _LogoBadge extends StatelessWidget {
-  const _LogoBadge();
+
+class _Logo extends StatelessWidget {
+  const _Logo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/listo.png',
+      width: 250,
+      height: 250,
+      fit: BoxFit.contain,
+    );
+  }
+}
+
+
+/// Tarjeta con encabezado, novedades y badge de confianza.
+class _NoveltiesCard extends StatelessWidget {
+  const _NoveltiesCard();
+
+  static const List<_NoveltyItem> _items = [
+    _NoveltyItem(
+      icon: Icons.calendar_month_rounded,
+      text: 'Organiza tus gastos quincenales y mensuales',
+    ),
+    _NoveltyItem(
+      icon: Icons.notifications_active_rounded,
+      text: 'Recordatorios antes de cada fecha de pago',
+    ),
+    _NoveltyItem(
+      icon: Icons.lightbulb_rounded,
+      text: 'Consejos financieros para ahorrar más cada mes',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 128,
-      height: 128,
-      alignment: Alignment.center,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: AppColors.accentGreen.withOpacity(0.35),
-          width: 1.4,
+          color: Colors.white.withOpacity(0.14),
+          width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.accentGreen.withOpacity(0.35),
-            blurRadius: 48,
-            spreadRadius: 2,
+        color: Colors.white.withOpacity(0.04),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'NOVEDADES',
+                style: GoogleFonts.montserrat(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.accentGreen,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const _FreeBadge(),
+            ],
           ),
+
+          const SizedBox(height: 10),
+
+          Text(
+            'Controla tus pagos quincenales y mensuales, sin complicaciones.',
+            style: GoogleFonts.montserrat(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+              height: 1.3,
+            ),
+          ),
+
+          const SizedBox(height: 22),
+
+          for (int i = 0; i < _items.length; i++) ...[
+            _NoveltyRow(item: _items[i]),
+            if (i != _items.length - 1) const SizedBox(height: 16),
+          ],
+
+          const SizedBox(height: 22),
+          Divider(color: Colors.white.withOpacity(0.10), height: 1),
+          const SizedBox(height: 16),
+
+          const _TrustRow(),
         ],
       ),
-      child: const ShieldLogo(size: 64),
     );
   }
 }
 
-class _AppTitle extends StatelessWidget {
-  const _AppTitle();
+class _NoveltyItem {
+  final IconData icon;
+  final String text;
+
+  const _NoveltyItem({required this.icon, required this.text});
+}
+
+class _NoveltyRow extends StatelessWidget {
+  final _NoveltyItem item;
+
+  const _NoveltyRow({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'Pago Listo',
-      textAlign: TextAlign.center,
-      style: GoogleFonts.montserrat(
-        fontSize: 34,
-        fontWeight: FontWeight.w800,
-        color: AppColors.textPrimary,
-        letterSpacing: -0.5,
-        height: 1.1,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.accentGreen.withOpacity(0.15),
+          ),
+          child: Icon(
+            item.icon,
+            size: 19,
+            color: AppColors.accentGreen,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            item.text,
+            style: GoogleFonts.montserrat(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+
+/// Badge pequeño de "100% gratis" — a la gente le gusta verlo de entrada.
+class _FreeBadge extends StatelessWidget {
+  const _FreeBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: AppColors.accentGreen.withOpacity(0.15),
+      ),
+      child: Text(
+        '100% GRATIS',
+        style: GoogleFonts.montserrat(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: AppColors.accentGreen,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
 }
 
-class _Subtitle extends StatelessWidget {
-  const _Subtitle();
+
+/// Fila de confianza: seguridad de datos.
+class _TrustRow extends StatelessWidget {
+  const _TrustRow();
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'Bienvenido, organice sus gastos quincenales y mensuales '
-          'sin complicaciones.',
-      textAlign: TextAlign.center,
-      style: GoogleFonts.montserrat(
-        fontSize: 15,
-        fontWeight: FontWeight.w500,
-        color: AppColors.textSecondary,
-        height: 1.45,
-      ),
+    return Row(
+      children: [
+        Icon(
+          Icons.lock_rounded,
+          size: 16,
+          color: AppColors.textSecondary,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'Tus datos, siempre protegidos',
+          style: GoogleFonts.montserrat(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// Botón principal: relleno sólido con degradado verde y resplandor.
+
+/// Botón principal.
 class _PrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _PrimaryButton({required this.label, required this.onTap});
+  const _PrimaryButton({
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -178,12 +333,16 @@ class _PrimaryButton extends StatelessWidget {
   }
 }
 
-/// Botón secundario: texto plano con borde fino de cristal, sin relleno.
+
+/// Botón secundario.
 class _SecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _SecondaryButton({required this.label, required this.onTap});
+  const _SecondaryButton({
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
