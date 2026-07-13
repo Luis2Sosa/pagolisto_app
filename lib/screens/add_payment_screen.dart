@@ -8,12 +8,14 @@ import 'package:pagolisto/models/payment.dart';
 
 import '../services/lib/services/payments_controller.dart';
 
-/// Pantalla para registrar un nuevo pago recurrente.
+/// Pantalla para registrar un nuevo pago recurrente, o para editar
+/// (y opcionalmente borrar) uno que ya existe (pasando
+/// [paymentToEdit]).
 ///
-/// Al guardar, el pago se agrega a través de PaymentsController, que
-/// se encarga de persistirlo y de avisar a HomeScreen (y a cualquier
-/// otra pantalla que lo escuche) para que se refleje de inmediato,
-/// sin necesidad de recargar nada a mano.
+/// Al guardar, el pago se agrega/actualiza a través de
+/// PaymentsController, que se encarga de persistirlo y de avisar a
+/// HomeScreen (y a cualquier otra pantalla que lo escuche) para que
+/// se refleje de inmediato, sin necesidad de recargar nada a mano.
 class AddPaymentScreen extends StatefulWidget {
   /// Se llama justo después de guardar el pago con éxito. Úsalo
   /// cuando esta pantalla vive dentro de un IndexedStack (como pestaña
@@ -26,11 +28,20 @@ class AddPaymentScreen extends StatefulWidget {
   /// pestaña fija (no tiene a dónde "regresar" con el Navigator).
   final bool showBackButton;
 
+  /// Si se proporciona, la pantalla entra en modo edición: precarga
+  /// todos los campos con los datos de este pago, muestra el botón
+  /// de "Eliminar pago" y, al guardar, actualiza el registro
+  /// existente en vez de crear uno nuevo.
+  final Payment? paymentToEdit;
+
   const AddPaymentScreen({
     super.key,
     this.onSaved,
     this.showBackButton = true,
+    this.paymentToEdit,
   });
+
+  bool get isEditing => paymentToEdit != null;
 
   @override
   State<AddPaymentScreen> createState() => _AddPaymentScreenState();
@@ -38,14 +49,40 @@ class AddPaymentScreen extends StatefulWidget {
 
 class _AddPaymentScreenState extends State<AddPaymentScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nombreController = TextEditingController();
-  final _montoController = TextEditingController();
-  final _notasController = TextEditingController();
+  late final TextEditingController _nombreController;
+  late final TextEditingController _montoController;
+  late final TextEditingController _notasController;
 
-  PaymentPeriod _frecuencia = PaymentPeriod.quincenal;
-  PaymentCategory _categoria = PaymentCategory.otro;
-  DateTime _fecha = DateTime.now();
+  late PaymentPeriod _frecuencia;
+  late PaymentCategory _categoria;
+  late DateTime _fecha;
   bool _isSaving = false;
+  bool _isDeleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.paymentToEdit;
+
+    _nombreController = TextEditingController(text: existing?.nombre ?? '');
+    _montoController = TextEditingController(
+      text: existing != null ? _formatMontoParaEditar(existing.monto) : '',
+    );
+    _notasController = TextEditingController(text: existing?.notas ?? '');
+
+    _frecuencia = existing?.frecuencia ?? PaymentPeriod.quincenal;
+    _categoria = existing?.categoria ?? PaymentCategory.otro;
+    _fecha = existing?.fecha ?? DateTime.now();
+  }
+
+  String _formatMontoParaEditar(double monto) {
+    // Si el monto no tiene centavos, lo mostramos sin ".00" para que
+    // sea más cómodo de editar (ej. "500" en vez de "500.00").
+    if (monto == monto.roundToDouble()) {
+      return monto.toStringAsFixed(0);
+    }
+    return monto.toStringAsFixed(2);
+  }
 
   @override
   void dispose() {
@@ -89,6 +126,33 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       _montoController.text.replaceAll(',', '').trim(),
     );
 
+    if (widget.isEditing) {
+      final actualizado = Payment(
+        id: widget.paymentToEdit!.id,
+        nombre: _nombreController.text.trim(),
+        monto: monto,
+        frecuencia: _frecuencia,
+        fecha: _fecha,
+        notas: _notasController.text.trim(),
+        categoria: _categoria,
+        // Conservamos el estado de "pagado" que ya tenía; editar un
+        // pago no debería desmarcarlo como pagado.
+        pagado: widget.paymentToEdit!.pagado,
+      );
+
+      await PaymentsController.instance.updatePayment(actualizado);
+
+      if (!mounted) return;
+
+      setState(() => _isSaving = false);
+
+      // En modo edición siempre regresamos a la pantalla anterior,
+      // sin importar onSaved, porque no tiene sentido "limpiar el
+      // formulario" de un pago que ya existía.
+      Navigator.of(context).pop(true);
+      return;
+    }
+
     final payment = Payment(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       nombre: _nombreController.text.trim(),
@@ -122,6 +186,64 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
     }
   }
 
+  Future<void> _eliminarPago() async {
+    final payment = widget.paymentToEdit;
+    if (payment == null) return;
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF16221C),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Text(
+          '¿Eliminar pago?',
+          style: GoogleFonts.montserrat(
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Se eliminará "${payment.nombre}" y no se puede deshacer.',
+          style: GoogleFonts.montserrat(
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Eliminar',
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w800,
+                color: Colors.redAccent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado != true) return;
+
+    setState(() => _isDeleting = true);
+    await PaymentsController.instance.deletePayment(payment.id);
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,7 +273,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                       const SizedBox(width: 12),
                     const SizedBox(width: 4),
                     Text(
-                      'Añadir Pago',
+                      widget.isEditing ? 'Editar Pago' : 'Añadir Pago',
                       style: GoogleFonts.montserrat(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -227,7 +349,18 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                           maxLines: 3,
                         ),
                         const SizedBox(height: 28),
-                        _SaveButton(isSaving: _isSaving, onTap: _guardarPago),
+                        _SaveButton(
+                          isSaving: _isSaving,
+                          isEditing: widget.isEditing,
+                          onTap: _guardarPago,
+                        ),
+                        if (widget.isEditing) ...[
+                          const SizedBox(height: 14),
+                          _DeleteButton(
+                            isDeleting: _isDeleting,
+                            onTap: _eliminarPago,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -474,9 +607,14 @@ class _DateField extends StatelessWidget {
 
 class _SaveButton extends StatelessWidget {
   final bool isSaving;
+  final bool isEditing;
   final VoidCallback onTap;
 
-  const _SaveButton({required this.isSaving, required this.onTap});
+  const _SaveButton({
+    required this.isSaving,
+    required this.isEditing,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -503,13 +641,69 @@ class _SaveButton extends StatelessWidget {
           ),
         )
             : Text(
-          'GUARDAR PAGO',
+          isEditing ? 'GUARDAR CAMBIOS' : 'GUARDAR PAGO',
           style: GoogleFonts.montserrat(
             fontSize: 14,
             fontWeight: FontWeight.w800,
             color: Colors.black,
             letterSpacing: 0.6,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón secundario, solo visible en modo edición, para borrar el
+/// pago actual. Pide confirmación antes de eliminar (ver
+/// `_eliminarPago`), ya que es una acción irreversible.
+class _DeleteButton extends StatelessWidget {
+  final bool isDeleting;
+  final VoidCallback onTap;
+
+  const _DeleteButton({required this.isDeleting, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton(
+        onPressed: isDeleting ? null : onTap,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.redAccent.withOpacity(0.4)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        child: isDeleting
+            ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            color: Colors.redAccent,
+            strokeWidth: 2.2,
+          ),
+        )
+            : Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.delete_outline_rounded,
+              color: Colors.redAccent,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'ELIMINAR PAGO',
+              style: GoogleFonts.montserrat(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.redAccent,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
       ),
     );

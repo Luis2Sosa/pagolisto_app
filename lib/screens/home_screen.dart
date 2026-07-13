@@ -8,6 +8,96 @@ import 'package:pagolisto/services/local_storage_service.dart';
 
 import '../services/lib/services/payments_controller.dart';
 
+// TODO: ajusta este import al path real de tu pantalla de
+// agregar/editar pago si es distinto.
+import 'add_payment_screen.dart';
+
+/// Devuelve true si un pago está vencido: la fecha ya llegó (hoy o
+/// antes) y todavía no se ha marcado como pagado.
+///
+/// TODO (futuro): antes de llegar a este punto, mandar una
+/// notificación push X días antes de `payment.fecha` para avisar
+/// que el pago se acerca.
+bool _esPagoVencido(Payment payment) {
+  if (payment.pagado) return false;
+  final ahora = DateTime.now();
+  final hoy = DateTime(ahora.year, ahora.month, ahora.day);
+  final fecha = DateTime(
+    payment.fecha.year,
+    payment.fecha.month,
+    payment.fecha.day,
+  );
+  return !fecha.isAfter(hoy); // fecha <= hoy
+}
+
+/// Muestra un diálogo de confirmación antes de marcar/desmarcar un
+/// pago como pagado. Nunca navega a otra pantalla: esto es
+/// justamente para no tener que "entrar" a nada, solo confirmar.
+Future<void> _confirmarCambioEstado(
+    BuildContext context,
+    Payment payment,
+    ) async {
+  final vaAMarcarComoPagado = !payment.pagado;
+
+  final confirmado = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: const Color(0xFF16221C),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        vaAMarcarComoPagado
+            ? '¿Ya realizaste este pago?'
+            : '¿Marcar como pendiente?',
+        style: GoogleFonts.montserrat(
+          fontWeight: FontWeight.w800,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      content: Text(
+        vaAMarcarComoPagado
+            ? 'Confirma que ya pagaste "${payment.nombre}" por '
+            '${formatCurrency(payment.monto)}. Se moverá al final '
+            'de la lista.'
+            : '"${payment.nombre}" volverá a aparecer como pendiente '
+            'en "Próximos Pagos".',
+        style: GoogleFonts.montserrat(
+          color: AppColors.textMuted,
+          fontWeight: FontWeight.w500,
+          height: 1.4,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(
+            'Cancelar',
+            style: GoogleFonts.montserrat(
+              fontWeight: FontWeight.w700,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(
+            vaAMarcarComoPagado ? 'Confirmar' : 'Sí, marcar pendiente',
+            style: GoogleFonts.montserrat(
+              fontWeight: FontWeight.w800,
+              color: vaAMarcarComoPagado
+                  ? AppColors.accentGreen
+                  : Colors.orangeAccent,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmado == true) {
+    await PaymentsController.instance.togglePaid(payment.id);
+  }
+}
+
 /// Pantalla principal: saluda al usuario por su nombre, permite
 /// alternar entre vista quincenal/mensual y muestra los próximos
 /// pagos registrados.
@@ -27,6 +117,11 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userName = '';
   bool _isLoading = true;
   PaymentPeriod _selectedPeriod = PaymentPeriod.quincenal;
+
+  // Para no volver a "auto-seleccionar" la pestaña con más pagos
+  // cada vez que el usuario la cambia manualmente, solo lo hacemos
+  // una vez, justo después de cargar los datos por primera vez.
+  bool _autoPeriodApplied = false;
 
   @override
   void initState() {
@@ -54,14 +149,49 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _userName = name;
       _isLoading = false;
+      if (!_autoPeriodApplied) {
+        _selectedPeriod = _periodWithMorePayments();
+        _autoPeriodApplied = true;
+      }
     });
+  }
+
+  /// Devuelve la pestaña (quincenal/mensual) que tiene más pagos
+  /// registrados. Si hay empate, se queda en quincenal por defecto.
+  PaymentPeriod _periodWithMorePayments() {
+    final controller = PaymentsController.instance;
+    final quincenalCount = controller.byPeriod(PaymentPeriod.quincenal).length;
+    final mensualCount = controller.byPeriod(PaymentPeriod.mensual).length;
+    return mensualCount > quincenalCount
+        ? PaymentPeriod.mensual
+        : PaymentPeriod.quincenal;
+  }
+
+  void _openEditPayment(Payment payment) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddPaymentScreen(paymentToEdit: payment),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = PaymentsController.instance;
     final payments = List<Payment>.from(controller.byPeriod(_selectedPeriod))
-      ..sort((a, b) => a.fecha.compareTo(b.fecha));
+      ..sort((a, b) {
+        // Los pagados siempre van al final de la lista.
+        if (a.pagado != b.pagado) {
+          return a.pagado ? 1 : -1;
+        }
+        // Entre los no pagados, los más urgentes (fecha más cercana o
+        // ya vencida) van primero (arriba).
+        final byFecha = a.fecha.compareTo(b.fecha);
+        if (byFecha != 0) return byFecha;
+        // Desempate estable si dos pagos caen el mismo día.
+        return a.nombre.compareTo(b.nombre);
+      });
     final total = controller.totalByPeriod(_selectedPeriod);
 
     return Scaffold(
@@ -109,7 +239,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ...payments.map(
                         (payment) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _PaymentTile(payment: payment),
+                      child: _PaymentTile(
+                        payment: payment,
+                        onEdit: () => _openEditPayment(payment),
+                      ),
                     ),
                   ),
               ],
@@ -314,92 +447,144 @@ class _TotalCard extends StatelessWidget {
   }
 }
 
-/// Tarjeta de un pago dentro de "Próximos Pagos". Tocarla marca o
-/// desmarca el pago como pagado.
+/// Tarjeta de un pago dentro de "Próximos Pagos".
+///
+/// - Tocar la tarjeta abre un diálogo de confirmación para
+///   marcar/desmarcar el pago como pagado (no navega a otra
+///   pantalla).
+/// - Tocar el ícono de lápiz abre la pantalla de edición del pago.
+/// - Si el pago está vencido (la fecha ya llegó) y no se ha
+///   pagado, la tarjeta se pinta en rojo.
 class _PaymentTile extends StatelessWidget {
   final Payment payment;
+  final VoidCallback onEdit;
 
-  const _PaymentTile({required this.payment});
+  const _PaymentTile({required this.payment, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => PaymentsController.instance.togglePaid(payment.id),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-          color: Colors.white.withOpacity(0.03),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: payment.categoria.color.withOpacity(0.14),
+    final isOverdue = _esPagoVencido(payment);
+
+    final borderColor = isOverdue
+        ? Colors.redAccent.withOpacity(0.45)
+        : Colors.white.withOpacity(0.08);
+    final backgroundColor = isOverdue
+        ? Colors.redAccent.withOpacity(0.06)
+        : Colors.white.withOpacity(0.03);
+    final nameColor =
+    isOverdue ? Colors.redAccent : AppColors.textPrimary;
+    final dateColor =
+    isOverdue ? Colors.redAccent.withOpacity(0.85) : AppColors.textMuted;
+
+    return Opacity(
+      // Los ya pagados se ven un poco apagados, ya que están al
+      // final de la lista solo como referencia.
+      opacity: payment.pagado ? 0.55 : 1,
+      child: GestureDetector(
+        onTap: () => _confirmarCambioEstado(context, payment),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
+            color: backgroundColor,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isOverdue
+                      ? Colors.redAccent.withOpacity(0.14)
+                      : payment.categoria.color.withOpacity(0.14),
+                ),
+                child: Icon(
+                  payment.categoria.icon,
+                  color: isOverdue ? Colors.redAccent : payment.categoria.color,
+                  size: 20,
+                ),
               ),
-              child: Icon(
-                payment.categoria.icon,
-                color: payment.categoria.color,
-                size: 20,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      payment.nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.montserrat(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: nameColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isOverdue
+                          ? '${formatFechaCorta(payment.fecha)} · Vencido'
+                          : formatFechaCorta(payment.fecha),
+                      style: GoogleFonts.montserrat(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: dateColor,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    payment.nombre,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    formatCurrency(payment.monto),
                     style: GoogleFonts.montserrat(
                       fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      color: isOverdue ? Colors.redAccent : AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    formatFechaCorta(payment.fecha),
-                    style: GoogleFonts.montserrat(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textMuted,
-                    ),
+                  const SizedBox(height: 4),
+                  Icon(
+                    payment.pagado
+                        ? Icons.check_circle_rounded
+                        : (isOverdue
+                        ? Icons.error_rounded
+                        : Icons.radio_button_unchecked_rounded),
+                    color: payment.pagado
+                        ? AppColors.accentGreen
+                        : (isOverdue
+                        ? Colors.redAccent
+                        : AppColors.textMuted.withOpacity(0.5)),
+                    size: 18,
                   ),
                 ],
               ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  formatCurrency(payment.monto),
-                  style: GoogleFonts.montserrat(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+              const SizedBox(width: 6),
+              Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onEdit,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.edit_outlined,
+                      color: AppColors.textMuted,
+                      size: 18,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Icon(
-                  payment.pagado
-                      ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  color: payment.pagado
-                      ? AppColors.accentGreen
-                      : AppColors.textMuted.withOpacity(0.5),
-                  size: 18,
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
