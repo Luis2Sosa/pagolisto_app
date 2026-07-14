@@ -3,24 +3,34 @@ import 'package:flutter/foundation.dart';
 import 'package:pagolisto/models/payment.dart';
 import 'package:pagolisto/services/local_storage_service.dart';
 
-/// Calcula la fecha del siguiente ciclo de un pago recurrente, a
-/// partir de su fecha actual y su frecuencia.
+/// Calcula la próxima fecha de cobro de un pago recurrente a partir
+/// de su fecha actual y su frecuencia.
 ///
 /// - Quincenal: suma 15 días.
-/// - Mensual: suma un mes completo, ajustando meses más cortos
-///   (ej. 31 de enero -> 28/29 de febrero).
-DateTime siguienteFechaDePago(DateTime fecha, PaymentPeriod frecuencia) {
+/// - Mensual: mismo día, un mes después (si el mes siguiente tiene
+///   menos días que ese número de día, usa el último día de ese mes;
+///   ej. 31 de enero -> 28/29 de febrero).
+DateTime proximaFechaParaFrecuencia(
+    DateTime fechaActual,
+    PaymentPeriod frecuencia,
+    ) {
   if (frecuencia == PaymentPeriod.quincenal) {
-    return fecha.add(const Duration(days: 15));
+    return fechaActual.add(const Duration(days: 15));
   }
 
-  final nextMonth = fecha.month == 12 ? 1 : fecha.month + 1;
-  final nextYear = fecha.month == 12 ? fecha.year + 1 : fecha.year;
-  final ultimoDiaDelSiguienteMes = DateTime(nextYear, nextMonth + 1, 0).day;
-  final dia = fecha.day <= ultimoDiaDelSiguienteMes
-      ? fecha.day
-      : ultimoDiaDelSiguienteMes;
-  return DateTime(nextYear, nextMonth, dia);
+  final anioBase = fechaActual.year;
+  final mesBase = fechaActual.month;
+  final anio = mesBase == 12 ? anioBase + 1 : anioBase;
+  final mes = mesBase == 12 ? 1 : mesBase + 1;
+
+  // Día 0 del mes siguiente al que buscamos = último día del mes
+  // que buscamos.
+  final ultimoDiaDelMesSiguiente = DateTime(anio, mes + 1, 0).day;
+  final dia = fechaActual.day > ultimoDiaDelMesSiguiente
+      ? ultimoDiaDelMesSiguiente
+      : fechaActual.day;
+
+  return DateTime(anio, mes, dia);
 }
 
 /// Controlador central del estado de pagos.
@@ -74,33 +84,42 @@ class PaymentsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Alterna el estado pagado/pendiente sin tocar la fecha. Se deja
-  /// disponible por si otra pantalla (ej. Historial) lo necesita,
-  /// pero la pantalla principal usa `confirmarPago` en su lugar.
+  /// Marca/desmarca un pago como pagado SIN mover su fecha. Se deja
+  /// disponible como respaldo (por ejemplo, para des-marcar un pago
+  /// que haya quedado en estado "pagado" sin haber avanzado de
+  /// fecha), pero el flujo normal de "ya pagué esto" debe usar
+  /// [registrarPagoYAvanzar].
   Future<void> togglePaid(String id) async {
     await LocalStorageService.togglePaymentPaid(id);
     _payments = await LocalStorageService.getPayments();
     notifyListeners();
   }
 
-  /// Confirma que un pago recurrente ya se realizó: en vez de solo
-  /// marcarlo como pagado y dejarlo ahí, avanza automáticamente su
-  /// fecha al siguiente ciclo (quincena o mes) y lo deja como
-  /// pendiente para esa nueva fecha. Así el pago "vencido" de julio
-  /// se convierte, solo, en el pago de agosto — sin quedarse
-  /// marcado ni oscurecido en la lista.
-  Future<Payment> confirmarPago(Payment payment) async {
+  /// Flujo principal para confirmar que un pago recurrente ya se
+  /// realizó: en vez de dejarlo marcado como "pagado" para siempre,
+  /// calcula la próxima fecha de cobro (según la frecuencia) y
+  /// actualiza el registro para ese nuevo ciclo, quedando como
+  /// pendiente otra vez. Así el pago "avanza" solo al próximo mes o
+  /// quincena en vez de quedarse atorado en la fecha vieja.
+  Future<Payment> registrarPagoYAvanzar(Payment payment) async {
+    final nuevaFecha =
+    proximaFechaParaFrecuencia(payment.fecha, payment.frecuencia);
+
     final actualizado = Payment(
       id: payment.id,
       nombre: payment.nombre,
       monto: payment.monto,
       frecuencia: payment.frecuencia,
-      fecha: siguienteFechaDePago(payment.fecha, payment.frecuencia),
+      fecha: nuevaFecha,
       notas: payment.notas,
       categoria: payment.categoria,
       pagado: false,
     );
-    await updatePayment(actualizado);
+
+    await LocalStorageService.deletePayment(payment.id);
+    await LocalStorageService.addPayment(actualizado);
+    _payments = await LocalStorageService.getPayments();
+    notifyListeners();
     return actualizado;
   }
 

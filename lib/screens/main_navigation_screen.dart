@@ -19,6 +19,14 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
+  // GlobalKey para poder "hablarle" directamente al estado de
+  // HomeScreen desde aquí, aunque viva permanentemente dentro del
+  // IndexedStack (y por lo tanto nunca vuelva a pasar por
+  // initState). La usamos para pedirle que recalcule la pestaña
+  // (quincenal/mensual) con más pagos justo cuando el usuario
+  // regresa a Inicio.
+  final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
+
   // TODO: reemplazar los placeholders restantes por las pantallas
   // reales conforme se vayan construyendo (TipsScreen, HistoryScreen).
   //
@@ -26,14 +34,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   // callback (onSaved) que depende de este State para poder hacer
   // setState y regresar al tab de Inicio después de guardar.
   List<Widget> get _tabs => [
-    const HomeScreen(),
+    HomeScreen(key: _homeKey),
     AddPaymentScreen(
       showBackButton: false,
-      onSaved: () => setState(() => _currentIndex = 0),
+      onSaved: _goToHomeAndRefresh,
     ),
     const _PlaceholderTab(title: 'Consejos Financieros'),
     const _PlaceholderTab(title: 'Historial'),
   ];
+
+  /// Cambia a la pestaña de Inicio y le pide que recalcule cuál
+  /// periodo (quincenal/mensual) tiene más pagos. Se usa tanto al
+  /// tocar el ícono de Inicio en la barra inferior como al terminar
+  /// de guardar un pago nuevo desde AddPaymentScreen.
+  void _goToHomeAndRefresh() {
+    setState(() => _currentIndex = 0);
+    _homeKey.currentState?.refreshSelectedPeriod();
+  }
+
+  void _onTabSelected(int index) {
+    if (index == 0) {
+      _goToHomeAndRefresh();
+    } else {
+      setState(() => _currentIndex = index);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,9 +80,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               ),
               BottomNavBar(
                 currentIndex: _currentIndex,
-                onTabSelected: (index) {
-                  setState(() => _currentIndex = index);
-                },
+                onTabSelected: _onTabSelected,
               ),
             ],
           ),

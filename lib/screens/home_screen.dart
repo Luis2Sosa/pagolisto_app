@@ -30,14 +30,74 @@ bool _esPagoVencido(Payment payment) {
   return !fecha.isAfter(hoy); // fecha <= hoy
 }
 
-/// Muestra un diálogo de confirmación antes de marcar/desmarcar un
-/// pago como pagado. Nunca navega a otra pantalla: esto es
-/// justamente para no tener que "entrar" a nada, solo confirmar.
+/// Muestra un diálogo de confirmación al tocar un pago.
+///
+/// - Si el pago está pendiente: confirma que ya se pagó y, al
+///   aceptar, llama a `registrarPagoYAvanzar`, que actualiza la
+///   fecha al próximo ciclo (mes o quincena siguiente) y lo deja
+///   pendiente para esa nueva fecha. Por eso un pago recién pagado
+///   nunca se queda "marcado y oscuro": pasa a ser el próximo pago
+///   pendiente, con su fecha ya actualizada.
+/// - Si el pago quedó marcado como pagado sin avanzar de fecha
+///   (caso raro/legado), permite desmarcarlo manualmente.
 Future<void> _confirmarCambioEstado(
     BuildContext context,
     Payment payment,
     ) async {
-  final vaAMarcarComoPagado = !payment.pagado;
+  if (payment.pagado) {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF16221C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '¿Marcar como pendiente?',
+          style: GoogleFonts.montserrat(
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          '"${payment.nombre}" volverá a aparecer como pendiente en '
+              '"Próximos Pagos".',
+          style: GoogleFonts.montserrat(
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.w500,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Sí, marcar pendiente',
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w800,
+                color: Colors.orangeAccent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmado == true) {
+      await PaymentsController.instance.togglePaid(payment.id);
+    }
+    return;
+  }
+
+  final proximaFecha =
+  proximaFechaParaFrecuencia(payment.fecha, payment.frecuencia);
 
   final confirmado = await showDialog<bool>(
     context: context,
@@ -45,21 +105,16 @@ Future<void> _confirmarCambioEstado(
       backgroundColor: const Color(0xFF16221C),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
-        vaAMarcarComoPagado
-            ? '¿Ya realizaste este pago?'
-            : '¿Marcar como pendiente?',
+        '¿Ya realizaste este pago?',
         style: GoogleFonts.montserrat(
           fontWeight: FontWeight.w800,
           color: AppColors.textPrimary,
         ),
       ),
       content: Text(
-        vaAMarcarComoPagado
-            ? 'Confirma que ya pagaste "${payment.nombre}" por '
-            '${formatCurrency(payment.monto)}. Se moverá al final '
-            'de la lista.'
-            : '"${payment.nombre}" volverá a aparecer como pendiente '
-            'en "Próximos Pagos".',
+        'Se registrará "${payment.nombre}" (${formatCurrency(payment.monto)}) '
+            'como pagado y la fecha se actualizará automáticamente a '
+            '${formatFechaLarga(proximaFecha)}.',
         style: GoogleFonts.montserrat(
           color: AppColors.textMuted,
           fontWeight: FontWeight.w500,
@@ -80,12 +135,10 @@ Future<void> _confirmarCambioEstado(
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
           child: Text(
-            vaAMarcarComoPagado ? 'Confirmar' : 'Sí, marcar pendiente',
+            'Confirmar',
             style: GoogleFonts.montserrat(
               fontWeight: FontWeight.w800,
-              color: vaAMarcarComoPagado
-                  ? AppColors.accentGreen
-                  : Colors.orangeAccent,
+              color: AppColors.accentGreen,
             ),
           ),
         ),
@@ -94,7 +147,26 @@ Future<void> _confirmarCambioEstado(
   );
 
   if (confirmado == true) {
-    await PaymentsController.instance.togglePaid(payment.id);
+    await PaymentsController.instance.registrarPagoYAvanzar(payment);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF16221C),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          content: Text(
+            '"${payment.nombre}" pagado. Próxima fecha: '
+                '${formatFechaCorta(proximaFecha)}',
+            style: GoogleFonts.montserrat(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
   }
 }
 
@@ -106,22 +178,24 @@ Future<void> _confirmarCambioEstado(
 /// pago nuevo desde AddPaymentScreen (sea por Navigator.push o
 /// desde otra pestaña de un IndexedStack), esta pantalla se
 /// actualiza sola, sin recargar nada a mano.
+///
+/// El estado es público (`HomeScreenState`, no `_HomeScreenState`)
+/// para que MainNavigationScreen pueda tomarlo con un GlobalKey y
+/// llamar a `refreshSelectedPeriod()` cada vez que el usuario vuelve
+/// a esta pestaña — necesario porque, al vivir dentro de un
+/// IndexedStack, `initState()` solo corre una vez y no se repite
+/// cada vez que se re-selecciona el tab.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   String _userName = '';
   bool _isLoading = true;
   PaymentPeriod _selectedPeriod = PaymentPeriod.quincenal;
-
-  // Para no volver a "auto-seleccionar" la pestaña con más pagos
-  // cada vez que el usuario la cambia manualmente, solo lo hacemos
-  // una vez, justo después de cargar los datos por primera vez.
-  bool _autoPeriodApplied = false;
 
   @override
   void initState() {
@@ -149,10 +223,18 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _userName = name;
       _isLoading = false;
-      if (!_autoPeriodApplied) {
-        _selectedPeriod = _periodWithMorePayments();
-        _autoPeriodApplied = true;
-      }
+      _selectedPeriod = _periodWithMorePayments();
+    });
+  }
+
+  /// Recalcula y aplica la pestaña (quincenal/mensual) con más
+  /// pagos. Se llama cada vez que el usuario regresa a Inicio desde
+  /// otra pestaña, para que siempre abra donde hay más pagos,
+  /// aunque el usuario la haya cambiado manualmente la vez anterior.
+  void refreshSelectedPeriod() {
+    if (!mounted) return;
+    setState(() {
+      _selectedPeriod = _periodWithMorePayments();
     });
   }
 
@@ -181,12 +263,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final controller = PaymentsController.instance;
     final payments = List<Payment>.from(controller.byPeriod(_selectedPeriod))
       ..sort((a, b) {
-        // Los pagados siempre van al final de la lista.
+        // Los pagados (caso raro/legado) siempre van al final.
         if (a.pagado != b.pagado) {
           return a.pagado ? 1 : -1;
         }
-        // Entre los no pagados, los más urgentes (fecha más cercana o
-        // ya vencida) van primero (arriba).
+        // Entre los pendientes, los más urgentes (fecha más cercana
+        // o ya vencida) van primero (arriba).
         final byFecha = a.fecha.compareTo(b.fecha);
         if (byFecha != 0) return byFecha;
         // Desempate estable si dos pagos caen el mismo día.
@@ -449,9 +531,11 @@ class _TotalCard extends StatelessWidget {
 
 /// Tarjeta de un pago dentro de "Próximos Pagos".
 ///
-/// - Tocar la tarjeta abre un diálogo de confirmación para
-///   marcar/desmarcar el pago como pagado (no navega a otra
-///   pantalla).
+/// - Tocar la tarjeta abre un diálogo de confirmación. Si se
+///   confirma el pago, la fecha avanza sola al próximo ciclo (ver
+///   `registrarPagoYAvanzar`), así que la tarjeta nunca se queda
+///   marcada y oscura: vuelve a verse como un pago pendiente normal,
+///   solo que con la fecha ya actualizada.
 /// - Tocar el ícono de lápiz abre la pantalla de edición del pago.
 /// - Si el pago está vencido (la fecha ya llegó) y no se ha
 ///   pagado, la tarjeta se pinta en rojo.
@@ -476,115 +560,110 @@ class _PaymentTile extends StatelessWidget {
     final dateColor =
     isOverdue ? Colors.redAccent.withOpacity(0.85) : AppColors.textMuted;
 
-    return Opacity(
-      // Los ya pagados se ven un poco apagados, ya que están al
-      // final de la lista solo como referencia.
-      opacity: payment.pagado ? 0.55 : 1,
-      child: GestureDetector(
-        onTap: () => _confirmarCambioEstado(context, payment),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: borderColor),
-            color: backgroundColor,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isOverdue
-                      ? Colors.redAccent.withOpacity(0.14)
-                      : payment.categoria.color.withOpacity(0.14),
-                ),
-                child: Icon(
-                  payment.categoria.icon,
-                  color: isOverdue ? Colors.redAccent : payment.categoria.color,
-                  size: 20,
-                ),
+    return GestureDetector(
+      onTap: () => _confirmarCambioEstado(context, payment),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+          color: backgroundColor,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isOverdue
+                    ? Colors.redAccent.withOpacity(0.14)
+                    : payment.categoria.color.withOpacity(0.14),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      payment.nombre,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        color: nameColor,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isOverdue
-                          ? '${formatFechaCorta(payment.fecha)} · Vencido'
-                          : formatFechaCorta(payment.fecha),
-                      style: GoogleFonts.montserrat(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: dateColor,
-                      ),
-                    ),
-                  ],
-                ),
+              child: Icon(
+                payment.categoria.icon,
+                color: isOverdue ? Colors.redAccent : payment.categoria.color,
+                size: 20,
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    formatCurrency(payment.monto),
+                    payment.nombre,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.montserrat(
                       fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                      color: isOverdue ? Colors.redAccent : AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      color: nameColor,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Icon(
-                    payment.pagado
-                        ? Icons.check_circle_rounded
-                        : (isOverdue
-                        ? Icons.error_rounded
-                        : Icons.radio_button_unchecked_rounded),
-                    color: payment.pagado
-                        ? AppColors.accentGreen
-                        : (isOverdue
-                        ? Colors.redAccent
-                        : AppColors.textMuted.withOpacity(0.5)),
-                    size: 18,
+                  const SizedBox(height: 2),
+                  Text(
+                    isOverdue
+                        ? '${formatFechaCorta(payment.fecha)} · Vencido'
+                        : formatFechaCorta(payment.fecha),
+                    style: GoogleFonts.montserrat(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: dateColor,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(width: 6),
-              Material(
-                color: Colors.transparent,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: onEdit,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.edit_outlined,
-                      color: AppColors.textMuted,
-                      size: 18,
-                    ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  formatCurrency(payment.monto),
+                  style: GoogleFonts.montserrat(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: isOverdue ? Colors.redAccent : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Icon(
+                  payment.pagado
+                      ? Icons.check_circle_rounded
+                      : (isOverdue
+                      ? Icons.error_rounded
+                      : Icons.radio_button_unchecked_rounded),
+                  color: payment.pagado
+                      ? AppColors.accentGreen
+                      : (isOverdue
+                      ? Colors.redAccent
+                      : AppColors.textMuted.withOpacity(0.5)),
+                  size: 18,
+                ),
+              ],
+            ),
+            const SizedBox(width: 6),
+            Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onEdit,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.edit_outlined,
+                    color: AppColors.textMuted,
+                    size: 18,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
