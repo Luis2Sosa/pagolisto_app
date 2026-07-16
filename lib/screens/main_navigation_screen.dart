@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pagolisto/core/app_colors.dart';
 import 'package:pagolisto/screens/add_payment_screen.dart';
 import 'package:pagolisto/screens/home_screen.dart';
+import 'package:pagolisto/screens/history_screen.dart';
 import 'package:pagolisto/widgets/bottom_nav_bar.dart';
 
 /// Contenedor principal con pestañas: mantiene la barra de navegación
@@ -19,44 +20,42 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  // GlobalKey para poder "hablarle" directamente al estado de
-  // HomeScreen desde aquí, aunque viva permanentemente dentro del
-  // IndexedStack (y por lo tanto nunca vuelva a pasar por
-  // initState). La usamos para pedirle que recalcule la pestaña
-  // (quincenal/mensual) con más pagos justo cuando el usuario
-  // regresa a Inicio.
+  // Permite comunicarse con HomeScreen aunque viva dentro del IndexedStack.
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
 
-  // TODO: reemplazar los placeholders restantes por las pantallas
-  // reales conforme se vayan construyendo (TipsScreen, HistoryScreen).
-  //
-  // No es "static const" porque AddPaymentScreen necesita un
-  // callback (onSaved) que depende de este State para poder hacer
-  // setState y regresar al tab de Inicio después de guardar.
+  // Pestañas principales de la aplicación.
   List<Widget> get _tabs => [
     HomeScreen(key: _homeKey),
+
     AddPaymentScreen(
       showBackButton: false,
       onSaved: _goToHomeAndRefresh,
     ),
-    const _PlaceholderTab(title: 'Consejos Financieros'),
-    const _PlaceholderTab(title: 'Historial'),
+
+    const _PlaceholderTab(
+      title: 'Consejos Financieros',
+    ),
+
+    const HistoryScreen(),
   ];
 
-  /// Cambia a la pestaña de Inicio y le pide que recalcule cuál
-  /// periodo (quincenal/mensual) tiene más pagos. Se usa tanto al
-  /// tocar el ícono de Inicio en la barra inferior como al terminar
-  /// de guardar un pago nuevo desde AddPaymentScreen.
+  /// Regresa a Inicio y actualiza los pagos mostrados.
   void _goToHomeAndRefresh() {
-    setState(() => _currentIndex = 0);
+    setState(() {
+      _currentIndex = 0;
+    });
+
     _homeKey.currentState?.refreshSelectedPeriod();
   }
 
+  /// Controla los cambios de pestaña desde la barra inferior.
   void _onTabSelected(int index) {
     if (index == 0) {
       _goToHomeAndRefresh();
     } else {
-      setState(() => _currentIndex = index);
+      setState(() {
+        _currentIndex = index;
+      });
     }
   }
 
@@ -66,9 +65,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
+
         decoration: const BoxDecoration(
           gradient: AppColors.backgroundGradient,
         ),
+
         child: SafeArea(
           child: Column(
             children: [
@@ -78,6 +79,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   children: _tabs,
                 ),
               ),
+
               BottomNavBar(
                 currentIndex: _currentIndex,
                 onTabSelected: _onTabSelected,
@@ -90,11 +92,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-/// Pantalla temporal para pestañas que aún no se han construido.
+
+/// Pantalla temporal para pestañas que todavía no están construidas.
 class _PlaceholderTab extends StatelessWidget {
   final String title;
 
-  const _PlaceholderTab({required this.title});
+  const _PlaceholderTab({
+    required this.title,
+  });
 
   @override
   Widget build(BuildContext context) {

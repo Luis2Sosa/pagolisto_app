@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:pagolisto/models/payment.dart';
+import 'package:pagolisto/models/payment_history_entry.dart';
 
 /// Centraliza todo el acceso a almacenamiento local (SharedPreferences).
 ///
@@ -14,6 +15,7 @@ class LocalStorageService {
 
   static const String _keyUserName = 'user_name';
   static const String _keyPayments = 'payments_list';
+  static const String _keyHistory = 'payments_history';
 
   /// Guarda el nombre del usuario.
   static Future<void> saveUserName(String name) async {
@@ -81,6 +83,33 @@ class LocalStorageService {
     final payments = await getPayments();
     payments.removeWhere((p) => p.id == id);
     await _savePayments(payments);
+  }
+
+  /// Devuelve todo el historial de pagos ya confirmados, sin ningún
+  /// orden garantizado (quien lo lea debe ordenarlo si lo necesita).
+  static Future<List<PaymentHistoryEntry>> getHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_keyHistory) ?? [];
+    return raw
+        .map((item) =>
+        PaymentHistoryEntry.fromJson(jsonDecode(item) as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Sobrescribe la lista completa de historial.
+  static Future<void> _saveHistory(List<PaymentHistoryEntry> history) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = history.map((h) => jsonEncode(h.toJson())).toList();
+    await prefs.setStringList(_keyHistory, raw);
+  }
+
+  /// Agrega una entrada nueva al historial (un pago recién
+  /// confirmado). El historial nunca se edita ni se borra desde la
+  /// UI normal: es un registro permanente de lo que ya se pagó.
+  static Future<void> addHistoryEntry(PaymentHistoryEntry entry) async {
+    final history = await getHistory();
+    history.add(entry);
+    await _saveHistory(history);
   }
 
   /// Borra todos los datos guardados (útil para pruebas / logout).
