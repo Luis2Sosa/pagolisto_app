@@ -130,6 +130,207 @@ const List<FinancialTip> financialTips = [
     icono: Icons.flag_rounded,
     color: Color(0xFF2DD4BF),
   ),
+  FinancialTip(
+    titulo: 'Usa efectivo para tus gastos variables',
+    descripcion:
+    'Sacar un presupuesto semanal en efectivo para comida, salidas '
+        'o antojos hace que el gasto se sienta real, a diferencia de '
+        'una tarjeta que nunca "se acaba".',
+    highlight: 'Ver el dinero salir de tu mano cambia cómo lo gastas.',
+    icono: Icons.payments_rounded,
+    color: Color(0xFF4ADE80),
+  ),
+  FinancialTip(
+    titulo: '¿Lo necesito o lo quiero?',
+    descripcion:
+    'Antes de pagar, hazte esta pregunta en voz alta. No se trata '
+        'de no darte gustos nunca, sino de hacerlo de forma '
+        'consciente y no automática.',
+    highlight: 'Un segundo de pausa evita muchos arrepentimientos.',
+    icono: Icons.psychology_alt_rounded,
+    color: Color(0xFFFACC15),
+  ),
+  FinancialTip(
+    titulo: 'Revisa tu estado de cuenta cada semana',
+    descripcion:
+    'Los cargos duplicados, las renovaciones que se te olvidaron o '
+        'los errores bancarios se resuelven fácil si los detectas a '
+        'tiempo, y muy difícil si los notas meses después.',
+    highlight: 'Cinco minutos a la semana valen más que una sorpresa a fin de mes.',
+    icono: Icons.fact_check_rounded,
+    color: Color(0xFF38BDF8),
+  ),
+  FinancialTip(
+    titulo: 'No toda oferta es un ahorro real',
+    descripcion:
+    'Algunas tiendas suben el precio unos días antes de la "oferta" '
+        'para que el descuento se vea más grande de lo que es. '
+        'Compara con el precio de antes si puedes.',
+    highlight: 'Un descuento solo ahorra si de verdad ibas a comprarlo.',
+    icono: Icons.local_offer_rounded,
+    color: Color(0xFFF87171),
+  ),
+  FinancialTip(
+    titulo: 'Un presupuesto no es una cárcel',
+    descripcion:
+    'Piensa en tu presupuesto como un mapa, no como una lista de '
+        'prohibiciones. Un mapa te dice a dónde puedes ir sin '
+        'perderte, no te encierra en un solo camino.',
+    highlight: 'Planear no es limitarte: es decidir tú, no el saldo.',
+    icono: Icons.map_rounded,
+    color: Color(0xFFA78BFA),
+  ),
+  FinancialTip(
+    titulo: 'Cocina para varios días',
+    descripcion:
+    'Preparar comida para dos o tres días de una sola vez reduce '
+        'tanto el tiempo en la cocina como la tentación de pedir '
+        'algo a domicilio "porque ya no hay nada que comer".',
+    highlight: 'Menos pedidos de última hora, menos gasto sin planear.',
+    icono: Icons.restaurant_rounded,
+    color: Color(0xFFFB923C),
+  ),
+  FinancialTip(
+    titulo: 'Negocia tus tarifas fijas',
+    descripcion:
+    'Internet, cable, plan de celular... muchas veces una llamada '
+        'para preguntar por promociones vigentes baja el pago sin '
+        'cambiar de proveedor.',
+    highlight: 'Una llamada de diez minutos puede bajar tu recibo cada mes.',
+    icono: Icons.support_agent_rounded,
+    color: Color(0xFF34D399),
+  ),
+  FinancialTip(
+    titulo: 'El tiempo hace crecer hasta lo poco',
+    descripcion:
+    'Ahorrar una cantidad pequeña pero constante, desde ahora, '
+        'termina sumando más de lo que parece cuando le das tiempo '
+        'para crecer.',
+    highlight: 'Empezar hoy con poco vale más que esperar a tener mucho.',
+    icono: Icons.trending_up_rounded,
+    color: Color(0xFF60A5FA),
+  ),
+  FinancialTip(
+    titulo: 'Registra hasta lo más chico',
+    descripcion:
+    'Un pago de 20 no parece importante por sí solo, pero si se te '
+        'olvida anotar varios de esos a la semana, tu control de '
+        'gastos deja de ser real.',
+    highlight: 'Un registro completo, aunque sea de montos chicos, vale más que uno "casi" completo.',
+    icono: Icons.checklist_rounded,
+    color: Color(0xFF2DD4BF),
+  ),
+  FinancialTip(
+    titulo: 'Identifica tus gatillos de gasto',
+    descripcion:
+    'Aburrimiento, estrés, cansancio... muchas compras no planeadas '
+        'nacen de una emoción, no de una necesidad real. Notarlo es '
+        'el primer paso para pausarlo.',
+    highlight: 'Reconocer el gatillo te da la opción de elegir distinto.',
+    icono: Icons.self_improvement_rounded,
+    color: Color(0xFFF472B6),
+  ),
+  FinancialTip(
+    titulo: 'Revisa tus renovaciones automáticas',
+    descripcion:
+    'Muchas apps y servicios se renuevan solos y te avisan poco o '
+        'nada antes de cobrarte otro periodo. Revisa las fechas de '
+        'corte de lo que tengas activo.',
+    highlight: 'Cancelar a tiempo es mucho más fácil que pedir un reembolso.',
+    icono: Icons.event_repeat_rounded,
+    color: Color(0xFFF87171),
+  ),
+  FinancialTip(
+    titulo: 'Duerme antes de una compra grande',
+    descripcion:
+    'Para decisiones de dinero importantes, dale una noche de por '
+        'medio. Con la cabeza descansada es más fácil ver si de '
+        'verdad conviene o si fue el momento el que empujó la '
+        'decisión.',
+    highlight: 'Las mejores decisiones de dinero rara vez se toman con prisa.',
+    icono: Icons.bedtime_rounded,
+    color: Color(0xFFFACC15),
+  ),
+  FinancialTip(
+    titulo: 'Ponle un límite a los antojos',
+    descripcion:
+    'Definir de antemano un monto mensual para "gastos sin '
+        'justificación" te deja disfrutar sin culpa, y a la vez '
+        'evita que se salga de control.',
+    highlight: 'Un límite claro te da permiso de gastar sin remordimiento.',
+    icono: Icons.pie_chart_rounded,
+    color: Color(0xFF4ADE80),
+  ),
+  FinancialTip(
+    titulo: 'Comparte lo que se pueda compartir',
+    descripcion:
+    'Varios servicios de streaming y suscripciones tienen planes '
+        'familiares pensados para varias personas. Si ya lo pagas '
+        'solo, revisa si te conviene compartirlo.',
+    highlight: 'El mismo servicio, dividido entre más personas, cuesta menos.',
+    icono: Icons.group_rounded,
+    color: Color(0xFF38BDF8),
+  ),
+  FinancialTip(
+    titulo: 'Revisa las comisiones de tu banco',
+    descripcion:
+    'Cuotas de manejo, comisiones por retiro fuera de red, cargos '
+        'por saldo mínimo... muchas veces existen formas de evitarlas '
+        'que el banco no te explica a menos que preguntes.',
+    highlight: 'Lo que no cuestionas, lo sigues pagando.',
+    icono: Icons.account_balance_rounded,
+    color: Color(0xFFA78BFA),
+  ),
+  FinancialTip(
+    titulo: 'No gastes de más solo por ganar puntos',
+    descripcion:
+    'La recompensa de una tarjeta o programa de puntos solo vale la '
+        'pena si de todos modos ibas a hacer esa compra. Comprar '
+        'más "para llegar a la meta" casi nunca sale a cuenta.',
+    highlight: 'Los puntos que te cuestan más de lo que valen no son un beneficio.',
+    icono: Icons.card_giftcard_rounded,
+    color: Color(0xFFFB923C),
+  ),
+  FinancialTip(
+    titulo: 'Planea tu quincena antes de que llegue',
+    descripcion:
+    'Saber, aunque sea a grandes rasgos, en qué se va a ir tu '
+        'próximo pago antes de que caiga te evita decisiones de '
+        'último momento con el dinero recién llegado.',
+    highlight: 'Un plan simple de antemano gana siempre a improvisar sobre la marcha.',
+    icono: Icons.event_available_rounded,
+    color: Color(0xFF34D399),
+  ),
+  FinancialTip(
+    titulo: 'Cuidado con "meses sin intereses"',
+    descripcion:
+    'Diferir un pago a varios meses sigue siendo un compromiso fijo '
+        'futuro, aunque hoy no te cueste nada extra. Revisa que ese '
+        'compromiso quepa en tus próximos pagos antes de aceptarlo.',
+    highlight: 'Sin intereses no significa sin compromiso.',
+    icono: Icons.calendar_month_rounded,
+    color: Color(0xFFF472B6),
+  ),
+  FinancialTip(
+    titulo: 'Pequeños hábitos bajan el recibo',
+    descripcion:
+    'Apagar luces que no usas, desconectar aparatos en espera, '
+        'cerrar bien las llaves de agua... son cambios chicos que, '
+        'sostenidos en el tiempo, sí se notan en el pago mensual.',
+    highlight: 'No hace falta un gran cambio; con constancia basta.',
+    icono: Icons.bolt_rounded,
+    color: Color(0xFF60A5FA),
+  ),
+  FinancialTip(
+    titulo: 'Reconoce tus logros de ahorro',
+    descripcion:
+    'Cuidar el dinero es más fácil de sostener si también celebras '
+        'cuando te va bien, no solo cuando te preocupas por lo que '
+        'gastaste de más.',
+    highlight: 'La disciplina dura más cuando también se siente bien.',
+    icono: Icons.emoji_events_rounded,
+    color: Color(0xFF2DD4BF),
+  ),
 ];
 
 /// Devuelve el consejo que corresponde a "hoy", de forma que sea el
@@ -144,12 +345,4 @@ FinancialTip tipDelDia({DateTime? ahora}) {
   final diaDelAnio = fecha.difference(DateTime(fecha.year, 1, 1)).inDays;
   final indice = diaDelAnio % financialTips.length;
   return financialTips[indice];
-}
-
-/// Número de consejo del día (1-based) dentro del ciclo, solo para
-/// mostrar algo como "Consejo 4 de 10" en la pantalla.
-int numeroDeTipDelDia({DateTime? ahora}) {
-  final fecha = ahora ?? DateTime.now();
-  final diaDelAnio = fecha.difference(DateTime(fecha.year, 1, 1)).inDays;
-  return (diaDelAnio % financialTips.length) + 1;
 }
